@@ -4,6 +4,62 @@ This file is loaded into every session's system prompt (the cache-stable prefix)
 so keep it concise and durable — it is the project's standing instructions to the
 agent. It is the Reasonix analog of Claude Code's CLAUDE.md.
 
+## Project
+
+Reasonix is a **config- and plugin-driven AI coding agent** — a single static Go binary
+tuned around DeepSeek's prefix cache for low token costs across long sessions.
+Module `reasonix` (Go 1.25+). Entry points:
+- **CLI**: `cmd/reasonix/main.go` → `cli.Run()` → chat TUI (`charm.land/bubbletea/v2`).
+- **Desktop**: `desktop/` — separate Go module (Wails/webview), shares the `internal/` kernel.
+- **HTTP/SSE server**: `internal/serve/` — web frontend for remote/SSH access.
+
+Configuration via `reasonix.toml`; providers, tools, and plugins are all declarative.
+
+## Commands
+
+```bash
+make build             # CLI + example plugin → bin/
+make cross             # cross-compile to 6 platforms → dist/
+make test              # go test ./...
+make vet               # go vet ./...
+make fmt               # gofmt -w .
+make desktop-test      # cd desktop && go test .
+make hooks             # install git pre-push hook (go vet)
+make clean             # rm -rf bin dist
+```
+
+CI: GitHub Actions (`ci.yml`) — test matrix across ubuntu/macos/windows,
+`golangci-lint` (errcheck, govet, ineffassign, staticcheck, unused).
+
+## Architecture
+
+Six load-bearing layers:
+
+1. **`internal/boot`** — Assembly layer. Loads config, resolves models, builds tool
+   registry (built-ins + plugins), wires permissions, and produces a `control.Controller`.
+   Every frontend shares this single bootstrap path.
+2. **`internal/control`** — Transport-agnostic session driver. Owns the agent run loop,
+   turn lifecycle, approvals, cancellation. Emits typed events to an `event.Sink`.
+   Central file: `controller.go` (200+ KB — the orchestrator).
+3. **`internal/agent`** — Agent logic. LLM interaction, tool execution, session save/load,
+   compaction, subagent management, fleet dispatch, evidence tracking, planning mode.
+   Core: `agent.go`, `coordinator.go` (two-model planner+executor), `task.go` (subagents).
+4. **`internal/provider`** — LLM provider abstraction. Schema canonicalization, retry logic,
+   dialect handling. Subpackages: `openai/`, `anthropic/` (blank-import wired in main).
+5. **`internal/tool`** — Tool framework. Registry, contract validation, progress reporting.
+   `tool/builtin/` auto-registers at compile time via blank import.
+6. **`internal/cli`** — CLI frontend. Chat TUI, command parsing, MCP manager, setup wizard,
+   theme, transcription. The largest UI surface.
+
+Supporting packages (selected):
+- **`internal/config`** — TOML config parsing and resolution.
+- **`internal/memory`** — Persistent project memory (frontmatter files + MEMORY.md).
+- **`internal/skill`** — Inline and subagent skill playbooks.
+- **`internal/acp`** — Agent Communication Protocol implementation.
+- **`internal/sandbox`** — Execution sandbox for tools.
+- **`internal/plugin`** — External plugin lifecycle (stdio JSON-RPC / MCP-compatible).
+- **`desktop/`** — Wails desktop app (separate module, CGO-enabled).
+
 ## Conventions
 
 - Go kernel under `internal/`; each package owns one concern and documents it in a

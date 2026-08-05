@@ -530,8 +530,10 @@ jobs:
             -RequireTrusted:$true
 
       - name: Sign artifacts (minisign)
+        if: env.HAS_MINISIGN == 'true'
         working-directory: desktop
         env:
+          HAS_MINISIGN: ${{ secrets.MINISIGN_PRIVATE_KEY != '' }}
           MINISIGN_PRIVATE_KEY: ${{ secrets.MINISIGN_PRIVATE_KEY }}
           MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
         run: go run ./cmd/sign sign ../dist/*
